@@ -1,0 +1,17 @@
+# Ignorar entorno virtual
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignorar archivos temporales
+*.log
+*.tmp
+*.bak
+.DS_Store
+
+# Build / distribución
+build/
+dist/
+*.egg-info/
