@@ -52,15 +52,41 @@ KEY_FILES_WEIGHT = {
     "pyproject.toml": 9,
 }
 
+# Archivos que siempre deben exportarse aun si la extension no coincide
+MANDATORY_FILES = {
+    "readme.md",
+    "readme",
+    "changelog.md",
+    "license",
+    "license.txt",
+    "makefile",
+    "dockerfile",
+}
+
+MAX_FILE_SIZE = 1_000_000  # bytes
+DETECT_BINARY_BYTES = 1024
+
 
 # --- Funciones auxiliares -------------------------------------------------
 def _is_relevant(fname: str, exts: set[str]) -> bool:
-    return any(fname.lower().endswith(e) for e in exts)
+    lower = fname.lower()
+    if lower in MANDATORY_FILES:
+        return True
+    return any(lower.endswith(e) for e in exts)
 
 
 def _file_weight(fname: str) -> int:
     """Pondera archivos clave para mostrarlos primero en el .txt."""
     return KEY_FILES_WEIGHT.get(fname.lower(), 0)
+
+
+def _is_binary_file(path: str) -> bool:
+    try:
+        with open(path, "rb") as fh:
+            chunk = fh.read(DETECT_BINARY_BYTES)
+            return b"\0" in chunk
+    except Exception:
+        return True
 
 
 # --- Recorre proyecto -----------------------------------------------------
@@ -95,11 +121,16 @@ def walk_project(
             if not _is_relevant(f, exts):
                 continue
             fpath = os.path.join(dpath, f)
+            if os.path.getsize(fpath) > MAX_FILE_SIZE:
+                continue
+            if _is_binary_file(fpath):
+                continue
+
             rel = os.path.relpath(fpath, root)
             struct.append(f"{indent}│   └── {f}")
 
             try:
-                with open(fpath, "r", encoding="utf-8") as fh:
+                with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
                     txt = fh.read()
             except Exception as exc:
                 txt = f"// Error leyendo {rel}: {exc}"
