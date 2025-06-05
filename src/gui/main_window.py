@@ -20,6 +20,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Exportador Multi IA")
         self.resize(900, 600)
 
+        # Barra de menu y estado
+        menubar = self.menuBar()
+        file_menu = menubar.addMenu("Archivo")
+        action_add = file_menu.addAction("Agregar proyecto")
+        action_remove = file_menu.addAction("Quitar seleccionado")
+        file_menu.addSeparator()
+        action_exit = file_menu.addAction("Salir")
+
+        export_menu = menubar.addMenu("Exportar")
+        action_export = export_menu.addAction("Exportar proyecto")
+
+        self.status = QtWidgets.QStatusBar()
+        self.setStatusBar(self.status)
+
         # ---------- widgets ----------
         self.list_projects = QtWidgets.QListWidget()
         btn_add = QtWidgets.QPushButton("Agregar proyecto")
@@ -77,12 +91,24 @@ class MainWindow(QtWidgets.QMainWindow):
         right.addWidget(QtWidgets.QLabel("Salida"))
         right.addWidget(self.text_output)
 
-        main = QtWidgets.QHBoxLayout()
-        main.addLayout(left, 1)
-        main.addLayout(right, 2)
-        central = QtWidgets.QWidget()
-        central.setLayout(main)
-        self.setCentralWidget(central)
+        left_w = QtWidgets.QWidget()
+        left_w.setLayout(left)
+        right_w = QtWidgets.QWidget()
+        right_w.setLayout(right)
+
+        splitter = QtWidgets.QSplitter()
+        splitter.addWidget(left_w)
+        splitter.addWidget(right_w)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+
+        self.setCentralWidget(splitter)
+
+        # menu actions
+        action_add.triggered.connect(self.add_project)
+        action_remove.triggered.connect(self.remove_project)
+        action_exit.triggered.connect(self.close)
+        action_export.triggered.connect(self.do_export)
 
         # ---------- signals ----------
         btn_add.clicked.connect(self.add_project)
@@ -98,13 +124,16 @@ class MainWindow(QtWidgets.QMainWindow):
         path = QtWidgets.QFileDialog.getExistingDirectory(self, "Seleccionar proyecto")
         if path:
             self.list_projects.addItem(path)
-            self.text_output.append(f"Proyecto agregado: {path}")
+            msg = f"Proyecto agregado: {path}"
+            self.status.showMessage(msg, 5000)
+            self.text_output.append(msg)
 
     def remove_project(self) -> None:
         for item in self.list_projects.selectedItems():
             self.list_projects.takeItem(self.list_projects.row(item))
         self.label_detect.setText("Tipo: N/A")
         self.export_list.clear()
+        self.status.showMessage("Proyecto eliminado", 3000)
 
     def detect_type(self, current, _previous=None) -> None:
         if not current:
@@ -128,11 +157,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         exp_dir = os.path.join(proj_item.text(), "txt_export")
         if not os.path.isdir(exp_dir):
+            self.status.showMessage("No se encontro carpeta txt_export", 4000)
             self.text_output.append("No se encontro carpeta txt_export")
             return
         for fname in sorted(os.listdir(exp_dir)):
             if fname.lower().endswith((".txt", ".md", ".json")):
                 self.export_list.addItem(os.path.join(exp_dir, fname))
+        self.status.showMessage("Lista de exports actualizada", 4000)
         self.text_output.append("Lista de exports actualizada.")
 
     def view_export(self) -> None:
@@ -143,6 +174,7 @@ class MainWindow(QtWidgets.QMainWindow):
             with open(item.text(), "r", encoding="utf-8") as fp:
                 text = fp.read()
         except Exception as exc:
+            self.status.showMessage("Error leyendo export", 4000)
             self.text_output.append(f"Error leyendo export: {exc}")
             return
         dlg = QtWidgets.QDialog(self)
@@ -158,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(btn_close)
         dlg.setLayout(layout)
         dlg.exec()
+        self.status.showMessage("Export mostrado", 3000)
 
     def extract_code(self) -> None:
         exp_item = self.export_list.currentItem()
@@ -192,8 +225,11 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(
                 self, "Extraccion", f"Archivos extraidos: {created}"
             )
-            self.text_output.append(f"Extraccion completa: {created} archivos.")
+            msg = f"Extraccion completa: {created} archivos."
+            self.status.showMessage(msg, 5000)
+            self.text_output.append(msg)
         except Exception as exc:
+            self.status.showMessage("Error extrayendo codigo", 4000)
             self.text_output.append(f"Error extrayendo codigo: {exc}")
 
     def do_export(self) -> None:
@@ -209,25 +245,32 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         try:
             output_path = exporter.export()
-            self.text_output.append(f"Export creado: {output_path}")
+            msg = f"Export creado: {output_path}"
+            self.status.showMessage(msg, 5000)
+            self.text_output.append(msg)
             self.list_exports_method()
         except Exception as exc:
+            self.status.showMessage("Error exportando", 4000)
             self.text_output.append(f"Error exportando: {exc}")
 
     def send_to_ai(self) -> None:
         if openai is None:
+            self.status.showMessage("Paquete openai no instalado", 4000)
             self.text_output.append("Paquete openai no instalado.")
             return
         if not hasattr(openai, "OpenAI"):
+            self.status.showMessage("openai.OpenAI no disponible", 4000)
             self.text_output.append("openai.OpenAI no esta disponible. Instala la version moderna.")
             return
 
         api_key = self.input_key.text().strip() or os.getenv("OPENAI_API_KEY")
         if not api_key:
+            self.status.showMessage("Debes ingresar tu API key", 4000)
             self.text_output.append("Debes ingresar tu API key.")
             return
         exp_item = self.export_list.currentItem()
         if not exp_item:
+            self.status.showMessage("Selecciona un export", 4000)
             self.text_output.append("Selecciona un export.")
             return
 
@@ -235,6 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
             content = fp.read()
 
         def worker() -> None:
+            self.status.showMessage("Enviando solicitud a OpenAI...", 2000)
             self.text_output.append("Enviando solicitud a OpenAI...")
             try:
                 if openai is None:
@@ -253,5 +297,6 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 answer = f"ERROR: {exc}"
             self.text_output.append("\n--- RESPUESTA IA ---\n" + answer)
+            self.status.showMessage("Respuesta recibida", 4000)
 
         Thread(target=worker, daemon=True).start()  # Only one thread start
